@@ -1,0 +1,15 @@
+.next
+node_modules
+.env
+.env.local
+.postgres-data
+.postgres-run
+pg-runtime
+postgresql-17.9-3-windows-x64.exe
+pg-server-extract.log
+dev.log
+dev.err.log
+dev-clean.log
+dev-clean.err.log
+cookies.txt
+.postgres-pass

@@ -1,0 +1,25 @@
+{
+  "name": "portal-fiscal-vercel",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@alexssmusica/node-pdf-nfe": "^1.2.19",
+    "@tailwindcss/postcss": "^4.2.2",
+    "next": "^16.2.4",
+    "nfewizard-io": "^1.0.2",
+    "node-sped-pdf": "^1.0.66",
+    "nodemailer": "^8.0.5",
+    "pdf-lib": "^1.17.1",
+    "pg": "8.13.1",
+    "postcss": "^8.5.10",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "tailwindcss": "^4.2.2"
+  }
+}
