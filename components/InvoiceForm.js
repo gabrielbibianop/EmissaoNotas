@@ -59,6 +59,7 @@ function createItem(overrides = {}) {
     productId: "",
     productCode: "",
     description: "",
+    cbenef: "",
     unit: "UN",
     cfop: "5102",
     st: "00",
@@ -208,6 +209,7 @@ export function InvoiceForm({
       productCode: product.sku || "",
       description: product.name || "",
       classFiscal: product.ncm || "",
+      cbenef: product.cbenef || "",
       unitValue: formatMoney(product.price || 0)
     });
   }
@@ -498,6 +500,10 @@ export function InvoiceForm({
               <label>
                 Classificacao fiscal / NCM
                 <input value={draftItem.classFiscal} onChange={(event) => updateDraftItem({ classFiscal: event.target.value })} placeholder="00000000" />
+              </label>
+              <label>
+                CBenef
+                <input value={draftItem.cbenef} onChange={(event) => updateDraftItem({ cbenef: event.target.value })} placeholder="Preencha se o beneficio fiscal exigir" />
               </label>
               <label>
                 Quantidade

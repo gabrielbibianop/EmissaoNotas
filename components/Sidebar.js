@@ -54,6 +54,7 @@ function buildMenu(isAdmin) {
 
   if (isAdmin) {
     groups[0].items.push({ href: "/usuarios", label: "Usuarios" });
+    groups[0].items.push({ href: "/banco", label: "Editor banco" });
   }
 
   return groups;

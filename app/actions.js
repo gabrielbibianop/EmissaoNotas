@@ -4,8 +4,19 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import nodemailer from "nodemailer";
-import { createUserAccount, loginUser, logoutUser, requireAdmin } from "@/lib/auth";
+import {
+  createUserAccount,
+  grantDatabaseEditorAccess,
+  hasDatabaseEditorAccess,
+  loginUser,
+  logoutUser,
+  requireAdmin,
+  requireAuth,
+  revokeDatabaseEditorAccess,
+  validateLoginCredentials
+} from "@/lib/auth";
 import { ensureSchema, getDb, query } from "@/lib/db";
+import { getTableSchema, normalizeEditorValue } from "@/lib/db-editor";
 import { buildInvoicePdfDocument } from "@/lib/invoice-documents";
 import {
   decryptSecretText,
@@ -104,6 +115,7 @@ function normalizeSaleItems(rawItems) {
         unitPrice,
         totalPrice,
         ncm: String(item.ncm || item.classFiscal || ""),
+        cbenef: String(item.cbenef || item.cBenef || ""),
         cfop: String(item.cfop || "5102"),
         st: String(item.st || "00"),
         icmsAliquot: asMoney(item.icmsAliquot ?? 18),
@@ -356,6 +368,7 @@ function normalizeInvoiceItems(formData) {
           productCode: String(item.productCode || "").trim(),
           description: String(item.description || "").trim(),
           classFiscal: String(item.classFiscal || "").trim(),
+          cbenef: String(item.cbenef || item.cBenef || "").trim(),
           cfop: String(item.cfop || "").trim(),
           st: String(item.st || "").trim(),
           quantity: String(item.quantity || "").trim() || "1",
@@ -380,6 +393,7 @@ function normalizeInvoiceItems(formData) {
       productCode: String(formData.get("itemProductCode") || "").trim(),
       description: String(formData.get("itemDescription") || "").trim(),
       classFiscal: String(formData.get("itemClassFiscal") || "").trim(),
+      cbenef: String(formData.get("itemCBenef") || "").trim(),
       cfop: String(formData.get("itemCfop") || "").trim(),
       st: String(formData.get("itemSt") || "").trim(),
       quantity: String(formData.get("itemQuantity") || "").trim() || "1",
@@ -1267,12 +1281,13 @@ export async function createProduct(formData) {
   await ensureSchema();
 
   await query(
-    `INSERT INTO products (name, sku, ncm, price, stock, description)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
+    `INSERT INTO products (name, sku, ncm, cbenef, price, stock, description)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
     [
       required(formData.get("name"), "Nome do produto"),
       required(formData.get("sku"), "SKU"),
       formData.get("ncm") || null,
+      formData.get("cbenef") || null,
       asMoney(formData.get("price")),
       Number(formData.get("stock") || 0),
       formData.get("description") || null
@@ -1288,12 +1303,13 @@ export async function updateProduct(formData) {
 
   await query(
     `UPDATE products
-     SET name = $1, sku = $2, ncm = $3, price = $4, stock = $5, description = $6
-     WHERE id = $7`,
+     SET name = $1, sku = $2, ncm = $3, cbenef = $4, price = $5, stock = $6, description = $7
+     WHERE id = $8`,
     [
       required(formData.get("name"), "Nome do produto"),
       required(formData.get("sku"), "SKU"),
       formData.get("ncm") || null,
+      formData.get("cbenef") || null,
       asMoney(formData.get("price")),
       Number(formData.get("stock") || 0),
       formData.get("description") || null,
@@ -1345,13 +1361,14 @@ export async function cloneProduct(formData) {
     }
 
     const insertResult = await query(
-      `INSERT INTO products (name, sku, ncm, price, stock, description)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO products (name, sku, ncm, cbenef, price, stock, description)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
       [
         `${product.name} (copia)`,
         nextSku,
         product.ncm,
+        product.cbenef,
         product.price,
         product.stock,
         product.description
@@ -2453,5 +2470,79 @@ export async function deleteUserAction(formData) {
   } catch (error) {
     rethrowIfRedirectError(error);
     redirectWithError("/usuarios", error);
+  }
+}
+
+function quoteIdentifier(value) {
+  return `"${String(value || "").replace(/"/g, "\"\"")}"`;
+}
+
+export async function unlockDatabaseEditor(formData) {
+  try {
+    await requireAuth();
+    const password = required(formData.get("rootPassword"), "Senha do usuario 0");
+    const rootUser = await validateLoginCredentials("0", password);
+
+    if (!rootUser) {
+      throw new Error("Senha do usuario 0 invalida.");
+    }
+
+    await grantDatabaseEditorAccess();
+    redirect("/banco?success=" + encodeURIComponent("Editor do banco liberado por 30 minutos."));
+  } catch (error) {
+    rethrowIfRedirectError(error);
+    redirectWithError("/banco", error);
+  }
+}
+
+export async function lockDatabaseEditor() {
+  await requireAuth();
+  await revokeDatabaseEditorAccess();
+  redirect("/banco?success=" + encodeURIComponent("Editor do banco bloqueado."));
+}
+
+export async function updateDatabaseRow(formData) {
+  try {
+    await requireAuth();
+
+    if (!(await hasDatabaseEditorAccess())) {
+      throw new Error("Desbloqueie o editor com a senha do usuario 0.");
+    }
+
+    await ensureSchema();
+    const tableName = required(formData.get("tableName"), "Tabela");
+    const rowIndex = required(formData.get("rowIndex"), "Linha");
+    const schema = await getTableSchema(String(tableName));
+    const pkField = `pk:${rowIndex}`;
+    const primaryKeyValue = required(formData.get(pkField), schema.primaryKey);
+    const editableColumns = schema.columns.filter((column) => column.editable);
+    const updates = [];
+    const values = [];
+
+    for (const column of editableColumns) {
+      const fieldName = `row:${rowIndex}:${column.name}`;
+      const nextValue = normalizeEditorValue(column, formData.get(fieldName));
+      values.push(nextValue);
+      updates.push(`${quoteIdentifier(column.name)} = $${values.length}`);
+    }
+
+    values.push(primaryKeyValue);
+
+    await query(
+      `UPDATE ${quoteIdentifier(schema.tableName)}
+       SET ${updates.join(", ")}
+       WHERE ${quoteIdentifier(schema.primaryKey)} = $${values.length}`,
+      values
+    );
+
+    revalidatePath("/banco");
+    redirect(
+      `/banco?table=${encodeURIComponent(String(tableName))}&success=${encodeURIComponent("Linha atualizada com sucesso.")}`
+    );
+  } catch (error) {
+    rethrowIfRedirectError(error);
+    const tableName = String(formData.get("tableName") || "");
+    const basePath = tableName ? `/banco?table=${encodeURIComponent(tableName)}` : "/banco";
+    redirectWithError(basePath, error);
   }
 }

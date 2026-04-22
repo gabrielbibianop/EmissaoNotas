@@ -21,7 +21,7 @@ async function getSalesPageData() {
       ORDER BY full_name
     `),
     query(`
-      SELECT id, name, sku, ncm, price
+      SELECT id, name, sku, ncm, cbenef, price
       FROM products
       ORDER BY name
     `),

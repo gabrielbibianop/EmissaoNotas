@@ -4,7 +4,13 @@ import { buildReportPdf, formatDate, money } from "@/lib/report-pdf";
 
 export const runtime = "nodejs";
 
-function buildFilterClause(dateField, { dateFrom, dateTo, customerId }, params, customerField = "customers.id") {
+function buildFilterClause(
+  dateField,
+  { dateFrom, dateTo, customerId, companyId },
+  params,
+  customerField = "customers.id",
+  companyField = "companies.id"
+) {
   const clauses = [];
 
   if (dateFrom) {
@@ -22,10 +28,15 @@ function buildFilterClause(dateField, { dateFrom, dateTo, customerId }, params, 
     clauses.push(`${customerField} = $${params.length}`);
   }
 
+  if (companyId) {
+    params.push(companyId);
+    clauses.push(`${companyField} = $${params.length}`);
+  }
+
   return clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
 }
 
-function buildFilterLabel({ dateFrom, dateTo, customerName }) {
+function buildFilterLabel({ dateFrom, dateTo, customerName, companyName }) {
   const parts = [];
 
   if (dateFrom || dateTo) {
@@ -34,6 +45,10 @@ function buildFilterLabel({ dateFrom, dateTo, customerName }) {
 
   if (customerName) {
     parts.push(`Cliente: ${customerName}`);
+  }
+
+  if (companyName) {
+    parts.push(`Empresa: ${companyName}`);
   }
 
   return parts.length > 0 ? ` | ${parts.join(" | ")}` : "";
@@ -52,7 +67,11 @@ async function getSalesReport(filters) {
   const customerNameResult = filters.customerId
     ? await query("SELECT full_name FROM customers WHERE id = $1", [filters.customerId])
     : { rows: [] };
+  const companyNameResult = filters.companyId
+    ? await query("SELECT COALESCE(trade_name, legal_name) AS company_name FROM companies WHERE id = $1", [filters.companyId])
+    : { rows: [] };
   const customerName = customerNameResult.rows[0]?.full_name || "";
+  const companyName = companyNameResult.rows[0]?.company_name || "";
   const [rowsResult, chartResult, summaryResult] = await Promise.all([
     query(
       `
@@ -103,7 +122,7 @@ async function getSalesReport(filters) {
 
   return {
     title: "Relatorio de vendas",
-    subtitle: `${currentSubtitle("Relatorio de vendas")}${buildFilterLabel({ ...filters, customerName })}`,
+    subtitle: `${currentSubtitle("Relatorio de vendas")}${buildFilterLabel({ ...filters, customerName, companyName })}`,
     summary: [
       { label: "Vendas", value: String(summaryResult.rows[0].total_sales) },
       { label: "Faturadas", value: String(summaryResult.rows[0].invoiced_sales) },
@@ -227,7 +246,11 @@ async function getInvoicesReport(filters) {
   const customerNameResult = filters.customerId
     ? await query("SELECT full_name FROM customers WHERE id = $1", [filters.customerId])
     : { rows: [] };
+  const companyNameResult = filters.companyId
+    ? await query("SELECT COALESCE(trade_name, legal_name) AS company_name FROM companies WHERE id = $1", [filters.companyId])
+    : { rows: [] };
   const customerName = customerNameResult.rows[0]?.full_name || "";
+  const companyName = companyNameResult.rows[0]?.company_name || "";
   const [rowsResult, chartResult, summaryResult] = await Promise.all([
     query(
       `
@@ -276,7 +299,7 @@ async function getInvoicesReport(filters) {
 
   return {
     title: "Relatorio de notas",
-    subtitle: `${currentSubtitle("Relatorio de notas")}${buildFilterLabel({ ...filters, customerName })}`,
+    subtitle: `${currentSubtitle("Relatorio de notas")}${buildFilterLabel({ ...filters, customerName, companyName })}`,
     summary: [
       { label: "Notas", value: String(summaryResult.rows[0].total_invoices) },
       { label: "Canceladas", value: String(summaryResult.rows[0].cancelled_invoices) },
@@ -313,16 +336,17 @@ async function getReportDefinition(tipo, filters) {
   }
 }
 
-export async function GET(_, { params }) {
+export async function GET(request, { params }) {
   await requireAuth();
   await ensureSchema();
   const resolvedParams = await params;
   const tipo = String(resolvedParams.tipo || "");
-  const url = new URL(_.url);
+  const url = new URL(request.url);
   const filters = {
     dateFrom: url.searchParams.get("dateFrom") || "",
     dateTo: url.searchParams.get("dateTo") || "",
-    customerId: url.searchParams.get("customerId") ? Number(url.searchParams.get("customerId")) : null
+    customerId: url.searchParams.get("customerId") ? Number(url.searchParams.get("customerId")) : null,
+    companyId: url.searchParams.get("companyId") ? Number(url.searchParams.get("companyId")) : null
   };
   const definition = await getReportDefinition(tipo, filters);
   const pdfBuffer = await buildReportPdf(definition);

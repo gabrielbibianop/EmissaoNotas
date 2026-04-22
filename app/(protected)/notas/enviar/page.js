@@ -18,7 +18,7 @@ async function getFormData() {
       FROM customers
       ORDER BY full_name
     `),
-    query("SELECT id, name, sku, ncm, price FROM products ORDER BY name")
+    query("SELECT id, name, sku, ncm, cbenef, price FROM products ORDER BY name")
   ]);
 
   return {

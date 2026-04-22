@@ -16,6 +16,7 @@ async function getProducts(search) {
       name,
       sku,
       ncm,
+      cbenef,
       price,
       stock,
       description,
@@ -44,6 +45,7 @@ async function getProducts(search) {
        OR name ILIKE $1
        OR sku ILIKE $1
        OR COALESCE(ncm, '') ILIKE $1
+       OR COALESCE(cbenef, '') ILIKE $1
        OR COALESCE(description, '') ILIKE $1
     ORDER BY created_at DESC`,
     [filter]
@@ -85,6 +87,7 @@ export default async function ProductSearchPage({ searchParams }) {
                 <th>Produto</th>
                 <th>SKU</th>
                 <th>NCM</th>
+                <th>CBenef</th>
                 <th>Preco</th>
                 <th>Estoque</th>
                 <th>Descricao</th>
@@ -94,7 +97,7 @@ export default async function ProductSearchPage({ searchParams }) {
             <tbody>
               {products.length === 0 ? (
                 <tr>
-                  <td colSpan="7">Nenhum produto encontrado.</td>
+                  <td colSpan="8">Nenhum produto encontrado.</td>
                 </tr>
               ) : (
                 products.map((product) => (
@@ -102,6 +105,7 @@ export default async function ProductSearchPage({ searchParams }) {
                     <td><strong>{product.name}</strong></td>
                     <td>{product.sku}</td>
                     <td>{product.ncm || "-"}</td>
+                    <td>{product.cbenef || "-"}</td>
                     <td>{formatCurrency(product.price)}</td>
                     <td>{product.stock}</td>
                     <td>{product.description || "-"}</td>

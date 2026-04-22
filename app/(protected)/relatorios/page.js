@@ -32,19 +32,29 @@ const reports = [
   }
 ];
 
-async function getCustomers() {
+async function getReportOptions() {
   await ensureSchema();
 
-  const result = await query(`
-    SELECT id, full_name, document
-    FROM customers
-    ORDER BY full_name
-  `);
+  const [customersResult, companiesResult] = await Promise.all([
+    query(`
+      SELECT id, full_name, document
+      FROM customers
+      ORDER BY full_name
+    `),
+    query(`
+      SELECT id, trade_name, legal_name, cnpj
+      FROM companies
+      ORDER BY trade_name NULLS LAST, legal_name
+    `)
+  ]);
 
-  return result.rows;
+  return {
+    customers: customersResult.rows,
+    companies: companiesResult.rows
+  };
 }
 
-function ReportFilters({ report, customers }) {
+function ReportFilters({ report, customers, companies }) {
   if (!report.supportsFilters) {
     return (
       <div className="action-row">
@@ -77,13 +87,24 @@ function ReportFilters({ report, customers }) {
           Data final
           <input type="date" name="dateTo" />
         </label>
-        <label className="full">
+        <label>
           Cliente
           <select name="customerId" defaultValue="">
             <option value="">Todos os clientes</option>
             {customers.map((customer) => (
               <option key={customer.id} value={customer.id}>
                 {customer.full_name}{customer.document ? ` - ${customer.document}` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Empresa
+          <select name="companyId" defaultValue="">
+            <option value="">Todas as empresas</option>
+            {companies.map((company) => (
+              <option key={company.id} value={company.id}>
+                {company.trade_name || company.legal_name}{company.cnpj ? ` - ${company.cnpj}` : ""}
               </option>
             ))}
           </select>
@@ -107,7 +128,7 @@ function ReportFilters({ report, customers }) {
 }
 
 export default async function ReportsPage() {
-  const customers = await getCustomers();
+  const { customers, companies } = await getReportOptions();
 
   return (
     <section className="page">
@@ -130,11 +151,11 @@ export default async function ReportsPage() {
               <p className="section-copy">{report.description}</p>
               {report.supportsFilters ? (
                 <p className="section-copy">
-                  Use periodo e cliente para refinar o relatorio antes de gerar o PDF.
+                  Use periodo, cliente e empresa para refinar o relatorio antes de gerar o PDF.
                 </p>
               ) : null}
             </div>
-            <ReportFilters report={report} customers={customers} />
+            <ReportFilters report={report} customers={customers} companies={companies} />
           </article>
         ))}
       </section>

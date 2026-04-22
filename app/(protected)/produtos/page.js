@@ -13,6 +13,7 @@ async function getProducts() {
       products.name,
       products.sku,
       products.ncm,
+      products.cbenef,
       products.price,
       products.stock,
       products.description,
@@ -84,6 +85,10 @@ export default async function ProductsPage({ searchParams }) {
           <label>
             NCM
             <input name="ncm" placeholder="8471.30.12" defaultValue={editingProduct?.ncm || ""} />
+          </label>
+          <label>
+            CBenef
+            <input name="cbenef" placeholder="Ex.: SP123456" defaultValue={editingProduct?.cbenef || ""} />
           </label>
           <label>
             Preco

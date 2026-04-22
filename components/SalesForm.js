@@ -37,6 +37,7 @@ function createItem(overrides = {}) {
     productId: "",
     productCode: "",
     description: "",
+    cbenef: "",
     unit: "UN",
     quantity: "1",
     unitPrice: "0,00",
@@ -91,7 +92,8 @@ export function SalesForm({ companies, customers, products, action, errorMessage
       productCode: product.sku || "",
       description: product.name || "",
       unitPrice: formatMoney(product.price || 0),
-      ncm: product.ncm || ""
+      ncm: product.ncm || "",
+      cbenef: product.cbenef || ""
     });
   }
 
@@ -210,6 +212,10 @@ export function SalesForm({ companies, customers, products, action, errorMessage
             <label>
               NCM
               <input value={draftItem.ncm} onChange={(event) => updateDraftItem({ ncm: event.target.value })} />
+            </label>
+            <label>
+              CBenef
+              <input value={draftItem.cbenef} onChange={(event) => updateDraftItem({ cbenef: event.target.value })} />
             </label>
             <label className="full">
               Descricao
