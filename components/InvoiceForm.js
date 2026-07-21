@@ -3,6 +3,13 @@
 import { useMemo, useState } from "react";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
 
+const INVOICE_STEPS = [
+  { id: "bloco1", number: "01", label: "Identificacao", description: "Emissor, cliente e dados fiscais" },
+  { id: "bloco2", number: "02", label: "Produtos", description: "Itens, quantidades e impostos" },
+  { id: "bloco3", number: "03", label: "Totais e entrega", description: "Valores, transporte e parcelas" },
+  { id: "bloco4", number: "04", label: "Revisao e envio", description: "Observacoes e transmissao" }
+];
+
 function parseMoney(value) {
   const raw = String(value ?? "").trim();
 
@@ -158,12 +165,7 @@ export function InvoiceForm({
   const [funruralMode, setFunruralMode] = useState(meta.funruralMode || "nao_desconta_nao_informa");
   const [funruralPercent, setFunruralPercent] = useState(formatMoney(meta.funruralPercent || 0));
   const [notes, setNotes] = useState(initialData?.notes || "");
-  const [collapsedSections, setCollapsedSections] = useState({
-    bloco1: false,
-    bloco2: false,
-    bloco3: false,
-    bloco4: false
-  });
+  const [activeSection, setActiveSection] = useState("bloco1");
 
   const currentItem = useMemo(() => calculateItem(draftItem), [draftItem]);
   const itemsWithCalc = useMemo(() => items.map((item) => calculateItem(item)), [items]);
@@ -182,6 +184,7 @@ export function InvoiceForm({
     : (totalProducts * funruralRate) / 100;
   const totalInvoice = totalProducts - discount + freight + insurance + other + ipiValue - funruralValue;
   const notesWithFunrural = buildInvoiceNotes(notes, funruralMode, funruralRate, funruralValue);
+  const activeStepIndex = INVOICE_STEPS.findIndex((step) => step.id === activeSection);
 
   const serializedItems = JSON.stringify(
     itemsWithCalc.map(({ subtotal, icmsValue: itemIcmsValue, ipiValue: itemIpiValue, ...item }) => ({
@@ -248,11 +251,11 @@ export function InvoiceForm({
     }
   }
 
-  function toggleSection(sectionKey) {
-    setCollapsedSections((current) => ({
-      ...current,
-      [sectionKey]: !current[sectionKey]
-    }));
+  function goToSection(sectionKey) {
+    setActiveSection(sectionKey);
+    window.requestAnimationFrame(() => {
+      document.querySelector(".invoice-stepper")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   return (
@@ -288,20 +291,42 @@ export function InvoiceForm({
         </div>
       </section>
 
+      <nav className="invoice-stepper panel" aria-label="Etapas da emissao">
+        <div className="invoice-progress" aria-hidden="true">
+          <span style={{ width: `${((activeStepIndex + 1) / INVOICE_STEPS.length) * 100}%` }} />
+        </div>
+        <div className="invoice-step-list">
+          {INVOICE_STEPS.map((step, index) => (
+            <button
+              key={step.id}
+              type="button"
+              className={`invoice-step ${activeSection === step.id ? "active" : ""} ${index < activeStepIndex ? "complete" : ""}`}
+              aria-current={activeSection === step.id ? "step" : undefined}
+              onClick={() => goToSection(step.id)}
+            >
+              <span className="invoice-step-number">{index < activeStepIndex ? "✓" : step.number}</span>
+              <span className="invoice-step-copy">
+                <strong>{step.label}</strong>
+                <small>{step.description}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      </nav>
+
       <section className="invoice-board">
-        <article className="panel invoice-section">
+        <article className={`panel invoice-section invoice-tab-panel ${activeSection === "bloco1" ? "active" : ""}`} aria-hidden={activeSection !== "bloco1"}>
           <div className="invoice-section-head">
             <div>
               <p className="eyebrow">Bloco 01</p>
               <h3>Numero / data / destinatario</h3>
+              <p>Defina quem emite, quem recebe e os dados principais da operacao.</p>
             </div>
-            <button type="button" className="button secondary small" onClick={() => toggleSection("bloco1")}>
-              {collapsedSections.bloco1 ? "Expandir" : "Minimizar"}
-            </button>
+            <span className="invoice-section-badge">Etapa 1 de 4</span>
           </div>
 
-          {!collapsedSections.bloco1 ? (
-          <div className="form-grid">
+          <div className="invoice-tab-content">
+          <div className="form-grid invoice-fields-card">
             <label>
               Empresa emissora
               <select name="companyId" required value={companyId || String(initialData?.companyId || "")} onChange={(event) => setCompanyId(event.target.value)}>
@@ -431,22 +456,24 @@ export function InvoiceForm({
               <input name="embarkLocation" defaultValue={meta.embarkLocation || ""} />
             </label>
           </div>
-          ) : null}
+          <div className="invoice-step-actions">
+            <span>Proximo: produtos e tributacao</span>
+            <button type="button" className="button primary" onClick={() => goToSection("bloco2")}>Continuar para produtos</button>
+          </div>
+          </div>
         </article>
 
-        <article className="panel invoice-section">
+        <article className={`panel invoice-section invoice-tab-panel ${activeSection === "bloco2" ? "active" : ""}`} aria-hidden={activeSection !== "bloco2"}>
           <div className="invoice-section-head">
             <div>
               <p className="eyebrow">Bloco 02</p>
               <h3>Dados produtos</h3>
+              <p>Adicione os itens e revise os valores calculados antes de avancar.</p>
             </div>
-            <button type="button" className="button secondary small" onClick={() => toggleSection("bloco2")}>
-              {collapsedSections.bloco2 ? "Expandir" : "Minimizar"}
-            </button>
+            <span className="invoice-section-badge">Etapa 2 de 4</span>
           </div>
 
-          {!collapsedSections.bloco2 ? (
-          <>
+          <div className="invoice-tab-content">
           <div className="invoice-item-card">
             <div className="invoice-item-head">
               <div>
@@ -580,22 +607,24 @@ export function InvoiceForm({
               <input name="invoiceFile" type="file" accept=".xml,.pdf,application/pdf,text/xml,application/xml" />
             </label>
           </div>
-          </>
-          ) : null}
+          <div className="invoice-step-actions split">
+            <button type="button" className="button secondary" onClick={() => goToSection("bloco1")}>Voltar</button>
+            <button type="button" className="button primary" onClick={() => goToSection("bloco3")}>Continuar para totais</button>
+          </div>
+          </div>
         </article>
 
-        <article className="panel invoice-section">
+        <article className={`panel invoice-section invoice-tab-panel ${activeSection === "bloco3" ? "active" : ""}`} aria-hidden={activeSection !== "bloco3"}>
           <div className="invoice-section-head">
             <div>
               <p className="eyebrow">Bloco 03</p>
               <h3>Totais / transporte / faturamento</h3>
+              <p>Confira o fechamento financeiro, a entrega e as condicoes de pagamento.</p>
             </div>
-            <button type="button" className="button secondary small" onClick={() => toggleSection("bloco3")}>
-              {collapsedSections.bloco3 ? "Expandir" : "Minimizar"}
-            </button>
+            <span className="invoice-section-badge">Etapa 3 de 4</span>
           </div>
 
-          {!collapsedSections.bloco3 ? (
+          <div className="invoice-tab-content">
           <div className="invoice-columns">
             <div className="invoice-stack">
               <div className="invoice-card">
@@ -753,23 +782,25 @@ export function InvoiceForm({
               </div>
             </div>
           </div>
-          ) : null}
+          <div className="invoice-step-actions split">
+            <button type="button" className="button secondary" onClick={() => goToSection("bloco2")}>Voltar</button>
+            <button type="button" className="button primary" onClick={() => goToSection("bloco4")}>Revisar e enviar</button>
+          </div>
+          </div>
         </article>
 
-        <article className="panel invoice-section">
+        <article className={`panel invoice-section invoice-tab-panel ${activeSection === "bloco4" ? "active" : ""}`} aria-hidden={activeSection !== "bloco4"}>
           <div className="invoice-section-head">
             <div>
               <p className="eyebrow">Bloco 04</p>
               <h3>Observacoes e transmissao</h3>
+              <p>Finalize as informacoes complementares e escolha como salvar a nota.</p>
             </div>
-            <button type="button" className="button secondary small" onClick={() => toggleSection("bloco4")}>
-              {collapsedSections.bloco4 ? "Expandir" : "Minimizar"}
-            </button>
+            <span className="invoice-section-badge">Etapa 4 de 4</span>
           </div>
 
-          {!collapsedSections.bloco4 ? (
-          <>
-          <div className="form-grid">
+          <div className="invoice-tab-content">
+          <div className="form-grid invoice-fields-card">
             <input type="hidden" name="notes" value={notesWithFunrural} />
             <label className="full">
               Observacoes da nota
@@ -788,9 +819,11 @@ export function InvoiceForm({
             ) : null}
           </div>
 
-          <ActionButtons saveInvoiceDraft={saveInvoiceDraft} createInvoiceAndSend={createInvoiceAndSend} isEditing={Boolean(initialData?.id)} />
-          </>
-          ) : null}
+          <div className="invoice-final-actions">
+            <button type="button" className="button secondary" onClick={() => goToSection("bloco3")}>Voltar</button>
+            <ActionButtons saveInvoiceDraft={saveInvoiceDraft} createInvoiceAndSend={createInvoiceAndSend} isEditing={Boolean(initialData?.id)} />
+          </div>
+          </div>
         </article>
       </section>
     </form>
